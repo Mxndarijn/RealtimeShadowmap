@@ -1,136 +1,321 @@
-#include "Shader.h"
-
-#include <iostream>
+#include <GL/glew.h>
+#include "shader.h"
 #include <fstream>
-
 #include <gtc/type_ptr.hpp>
+#include <iostream>
 
-bool checkShaderErrors(GLuint shaderId)
+
+void printShaderInfoLog(std::string fileName, GLuint obj)
 {
-	GLint status;
-	glGetShaderiv(shaderId, GL_COMPILE_STATUS, &status);					//kijk of het compileren is gelukt
-	if (status == GL_FALSE)
-	{
-		int length, charsWritten;
-		glGetShaderiv(shaderId, GL_INFO_LOG_LENGTH, &length);				//haal de lengte van de foutmelding op
-		char* infolog = new char[length + 1];
-		memset(infolog, 0, length + 1);
-		glGetShaderInfoLog(shaderId, length, &charsWritten, infolog);		//en haal de foutmelding zelf op
-		std::cout << "Error compiling shader:\n" << infolog << std::endl;
-		delete[] infolog;
-		return true;
-	}
-	return false;
-}
+	int infologLength = 0;
+	int charsWritten = 0;
+	char* infoLog;
 
+	glGetShaderiv(obj, GL_INFO_LOG_LENGTH, &infologLength);
 
-
-Shader::Shader(const std::string & filename)
-{
-	this->name = filename;
-	checkForUpdate();
-}
-
-void Shader::checkForUpdate()
-{
-	bool update = false;
-	struct stat result;
-	if (stat(("assets/shaders/" + name + ".vs").c_str(), &result) == 0)
+	if (infologLength > 0)
 	{
-		auto mod_time = result.st_mtime;
-		if (mod_time > vsUpdate)
-			update = true;
-		vsUpdate = mod_time;
-	}
-	if (stat(("assets/shaders/" + name + ".fs").c_str(), &result) == 0)
-	{
-		auto mod_time = result.st_mtime;
-		if (mod_time > fsUpdate)
-			update = true;
-		fsUpdate = mod_time;
-	}
-	if (update)
-	{
-		std::cout << "Reloading shader " << name << std::endl;
-		reloadShaders();
+		infoLog = (char*)malloc(infologLength);
+		glGetShaderInfoLog(obj, infologLength, &charsWritten, infoLog);
+		if (infoLog[0] != '\0')
+		{
+			printf("%s\n", fileName.c_str());
+			printf("%s\n", infoLog);
+			//	getchar();
+		}
+		free(infoLog);
 	}
 }
 
-void Shader::reloadShaders()
+void printProgramInfoLog(std::string fileName, GLuint obj)
 {
-	if (programId != -1)
-		glDeleteProgram(programId);
+	int infologLength = 0;
+	int charsWritten = 0;
+	char* infoLog;
 
-	uniforms.clear();
+	glGetProgramiv(obj, GL_INFO_LOG_LENGTH, &infologLength);
 
-	std::ifstream vertexShaderFile("assets/shaders/" + name + ".vs");
-	std::string vertexShaderData((std::istreambuf_iterator<char>(vertexShaderFile)), std::istreambuf_iterator<char>());
-	const char* cvertexShaderData = vertexShaderData.c_str();
-
-	std::ifstream fragShaderFile("assets/shaders/" + name + ".fs");
-	std::string fragShaderData((std::istreambuf_iterator<char>(fragShaderFile)), std::istreambuf_iterator<char>());
-	const char* cfragShaderData = fragShaderData.c_str();
-
-	programId = glCreateProgram();							// maak een shaderprogramma aan
-
-	GLuint vertexId = glCreateShader(GL_VERTEX_SHADER);		// maak vertex shader aan
-	glShaderSource(vertexId, 1, &cvertexShaderData, NULL);		// laat opengl de shader uit de variabele 'vertexShader' halen
-	glCompileShader(vertexId);								// compileer de shader
-	if (checkShaderErrors(vertexId))
+	if (infologLength > 0)
 	{
-		glDeleteProgram(programId);
-		programId = -1;
-		return;
+		infoLog = (char*)malloc(infologLength);
+		glGetProgramInfoLog(obj, infologLength, &charsWritten, infoLog);
+		if (infoLog[0] != '\0')
+		{
+			printf("%s\n", fileName.c_str());
+			printf("%s\n", infoLog);
+			//	getchar();
+		}
+		free(infoLog);
 	}
-	glAttachShader(programId, vertexId);					// hang de shader aan het shaderprogramma
+}
 
 
-	GLuint fragmentId = glCreateShader(GL_FRAGMENT_SHADER);	// maak fragment shader aan
-	glShaderSource(fragmentId, 1, &cfragShaderData, NULL);	// laat opengl de shader uit de variabele 'fragmentShader' halen
-	glCompileShader(fragmentId);							// compileer de shader
-	if (checkShaderErrors(fragmentId))
+ShaderProgram::ShaderProgram(std::string vertShader, std::string fragShader)
+{
+	programId = glCreateProgram();
+	addVertexShader(vertShader);
+	addFragmentShader(fragShader);
+}
+
+ShaderProgram::ShaderProgram(std::string vertShader, std::string fragShader, std::string geoShader)
+{
+	programId = glCreateProgram();
+	addVertexShader(vertShader);
+	addFragmentShader(fragShader);
+	addGeometryShader(geoShader);
+}
+
+ShaderProgram::~ShaderProgram(void)
+{
+}
+
+void ShaderProgram::bindAttributeLocation(std::string name, int position)
+{
+	glBindAttribLocation(programId, position, name.c_str());
+}
+
+void ShaderProgram::bindFragLocation(std::string name, int position)
+{
+	if (glBindFragDataLocation != NULL)
+		glBindFragDataLocation(programId, position, name.c_str());
+}
+
+void ShaderProgram::link()
+{
+	glLinkProgram(programId);
+}
+
+void ShaderProgram::use()
+{
+	glUseProgram(programId);
+}
+
+void ShaderProgram::addVertexShader(std::string filename)
+{
+	Shader* s = new Shader(filename, GL_VERTEX_SHADER);
+	shaders.push_back(s);
+	glAttachShader(programId, s->shaderId);
+}
+
+void ShaderProgram::addFragmentShader(std::string filename)
+{
+	Shader* s = new Shader(filename, GL_FRAGMENT_SHADER);
+	shaders.push_back(s);
+	glAttachShader(programId, s->shaderId);
+}
+
+void ShaderProgram::addGeometryShader(std::string filename)
+{
+	Shader* s = new Shader(filename, GL_GEOMETRY_SHADER);
+	shaders.push_back(s);
+	glAttachShader(programId, s->shaderId);
+}
+
+void ShaderProgram::setUniformMatrix4(const std::string& name, const glm::mat4& matrix)
+{
+	glUniformMatrix4fv(getUniformLocation(name), 1, 0, glm::value_ptr(matrix));
+}
+
+void ShaderProgram::setUniformMatrix3(const std::string& name, const glm::mat3& matrix)
+{
+	glUniformMatrix3fv(getUniformLocation(name), 1, 0, glm::value_ptr(matrix));
+}
+
+void ShaderProgram::setUniformInt(const std::string& name, int value)
+{
+	glUniform1i(getUniformLocation(name), value);
+}
+
+void ShaderProgram::setUniformFloat(const std::string& name, float value)
+{
+	glUniform1f(getUniformLocation(name), value);
+}
+
+void ShaderProgram::setUniformBool(const std::string& name, bool value)
+{
+	glUniform1i(getUniformLocation(name), value ? 1 : 0);
+}
+
+
+void ShaderProgram::setUniformVec2(const std::string& name, const glm::vec2& value)
+{
+	glUniform2fv(getUniformLocation(name), 1, glm::value_ptr(value));
+}
+
+void ShaderProgram::setUniformVec3(const std::string& name, const glm::vec3& value)
+{
+	glUniform3fv(getUniformLocation(name), 1, glm::value_ptr(value));
+}
+
+void ShaderProgram::setUniformVec4(const std::string& name, const glm::vec4& value)
+{
+	glUniform4fv(getUniformLocation(name), 1, glm::value_ptr(value));
+}
+
+
+GLuint ShaderProgram::getUniformLocation(const std::string& name)
+{
+	if (uniformLocations.find(name) == uniformLocations.end())
+		uniformLocations[name] = glGetUniformLocation(programId, name.c_str());
+	return uniformLocations[name];
+}
+
+bool ShaderProgram::hasShaders()
+{
+	return GLEW_VERSION_1_5 == GL_TRUE;
+}
+
+
+std::string getFileData(const std::string& fileName)
+{
+	std::string data = "";
+	std::string line;
+	std::ifstream pFile(fileName);
+	while (!pFile.eof() && pFile.good())
 	{
-		glDeleteProgram(programId);
-		programId = -1;
-		return;
+		std::getline(pFile, line);
+		if (line.substr(0, 8) == "#include")
+		{
+			std::string path = "";
+			if (fileName.find("/") != std::string::npos)
+				path = fileName.substr(0, fileName.rfind("/") + 1);
+			if (fileName.find("\\") != std::string::npos)
+				path = fileName.substr(0, fileName.rfind("\\") + 1);
+
+			std::string includeFile = "";
+			includeFile = line.substr(10, line.size() - 11); //heel vies
+			line = getFileData(path + includeFile);
+		}
+		data += line + "\n";
 	}
-
-	glAttachShader(programId, fragmentId);					// hang de shader aan het shaderprogramma
-
-	glBindAttribLocation(programId, 0, "a_position");		// zet de positie op vertex attribuut 0
-	glBindAttribLocation(programId, 1, "a_color");			// zet de kleur op vertex attribuut 1
-	glBindAttribLocation(programId, 2, "a_texcoord");		// zet de texcoord op vertex attribuut 2
-	glBindAttribLocation(programId, 3, "a_normal");			// zet de normaal op vertex attribuut 3
-	glLinkProgram(programId);								// link het programma, zorg dat alle attributes en varying gelinked zijn
-	glUseProgram(programId);								// Zet dit als actieve programma
+	return data;
 }
 
-void Shader::use()
+ShaderProgram::Shader::Shader(std::string fileName, GLenum type)
 {
-	glUseProgram(programId);								// Zet dit als actieve programma
+	std::string data = getFileData(fileName);
+	shaderId = glCreateShader(type);
+	const char* d2 = data.c_str();
+	glShaderSource(shaderId, 1, &d2, NULL);
+	glCompileShader(shaderId);
+	printShaderInfoLog(fileName, shaderId);
 }
 
-GLuint Shader::getUniform(const std::string & name)
+
+void UntypedShader::addShader(std::string fileName, int shaderType)
 {
-	auto it = uniforms.find(name);
-	if (it != uniforms.end())
-		return it->second;
-	GLuint location = glGetUniformLocation(programId, name.c_str());
-	uniforms[name] = location;
-	return location;
+	std::string data = getFileData(fileName);
+	GLuint shaderId = glCreateShader(shaderType);
+	const char* d2 = data.c_str();
+	glShaderSource(shaderId, 1, &d2, NULL);
+	glCompileShader(shaderId);
+	printShaderInfoLog(fileName, shaderId);
+
+	glAttachShader(programId, shaderId);
 }
 
-void Shader::setUniform(const std::string & name, const glm::mat4 & mat)
+UntypedShader::UntypedShader(std::string vertShader, std::string fragShader)
 {
-	glUniformMatrix4fv(getUniform(name), 1, GL_FALSE, glm::value_ptr(mat));
+	programId = glCreateProgram();
+	addShader(vertShader, GL_VERTEX_SHADER);
+	addShader(fragShader, GL_FRAGMENT_SHADER);
+	printProgramInfoLog(vertShader + "/" + fragShader, programId);
 }
 
-void Shader::setUniform(const std::string & name, int val)
+UntypedShader::UntypedShader(std::string vertShader, std::string fragShader, std::string geoShader)
 {
-	glUniform1i(getUniform(name), val);
+	programId = glCreateProgram();
+	addShader(vertShader, GL_VERTEX_SHADER);
+	addShader(fragShader, GL_FRAGMENT_SHADER);
+	addShader(geoShader, GL_GEOMETRY_SHADER);
+	printProgramInfoLog(vertShader + "/" + fragShader + "/" + geoShader, programId);
 }
 
-void Shader::setUniform(const std::string& name, const glm::vec3& vec)
+void UntypedShader::bindAttributeLocation(std::string name, int position)
 {
-	glUniform3fv(getUniform(name), 1, glm::value_ptr(vec));
+	glBindAttribLocation(programId, position, name.c_str());
+}
+
+void UntypedShader::bindFragLocation(std::string name, int position)
+{
+	glBindFragDataLocation(programId, position, name.c_str());
+}
+
+void UntypedShader::link()
+{
+	glLinkProgram(programId);
+}
+
+void UntypedShader::use()
+{
+	glUseProgram(programId);
+}
+
+void UntypedShader::registerUniform(int id, std::string value)
+{
+	if ((int)uniformLocations.size() <= id)
+		uniformLocations.resize(id + 1, -1);
+	uniformLocations[id] = glGetUniformLocation(programId, value.c_str());
+	if (uniformLocations[id] < 0)
+		std::cout << "Error registering uniform " << value << std::endl;
+}
+
+
+void UntypedShader::registerUniformArray(int id, std::string value, int size)
+{
+	if ((int)uniformLocationsArray.size() <= id)
+		uniformLocationsArray.resize(id + 1);
+	for (int i = 0; i < size; i++)
+		uniformLocationsArray[id].push_back(
+			glGetUniformLocation(programId, (value + "[" + std::to_string(i) + "]").c_str()));
+}
+
+void UntypedShader::setUniformRaw(int id, int value)
+{
+	glUniform1i(id, value);
+}
+
+void UntypedShader::setUniformRaw(int id, bool value)
+{
+	glUniform1i(id, value ? 1 : 0);
+}
+
+void UntypedShader::setUniformRaw(int id, float value)
+{
+	glUniform1f(id, value);
+}
+
+void UntypedShader::setUniformRaw(int id, const glm::vec2& value)
+{
+	glUniform2fv(id, 1, glm::value_ptr(value));
+}
+
+void UntypedShader::setUniformRaw(int id, const glm::vec3& value)
+{
+	glUniform3fv(id, 1, glm::value_ptr(value));
+}
+
+void UntypedShader::setUniformRaw(int id, const glm::vec4& value)
+{
+	glUniform4fv(id, 1, glm::value_ptr(value));
+}
+
+void UntypedShader::setUniformRaw(int id, const glm::mat3& value)
+{
+	glUniformMatrix3fv(id, 1, 0, glm::value_ptr(value));
+}
+
+void UntypedShader::setUniformRaw(int id, const glm::mat4& value)
+{
+	glUniformMatrix4fv(id, 1, 0, glm::value_ptr(value));
+}
+
+void UntypedShader::setUniformRaw(int id, const std::vector<glm::mat4>& values)
+{
+	float* data = new float[values.size() * 16];
+	for (size_t i = 0; i < values.size(); i++)
+		memcpy(&data[i * 16], glm::value_ptr(values[i]), 4 * 4 * 4);
+
+	glUniformMatrix4fv(id, values.size(), 0, data);
+	delete[] data;
 }
