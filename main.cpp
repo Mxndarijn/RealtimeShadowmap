@@ -5,14 +5,14 @@
 #include <gtc/type_ptr.hpp>
 #include <iostream>
 #include <fstream>
-#include <map>
 #include <vector>
 #include <iostream>
-#include <cstdio>
 #include <string>
 
+#include "stb_image_write.h"
+#include <thread>
+
 #define STB_PERLIN_IMPLEMENTATION
-#include "stb_noise.h"
 #include "stb_easy_font.h"
 #pragma comment(lib, "glew32.lib")
 
@@ -21,6 +21,9 @@
 #include "Camera.h"
 #include "ObjModel.h"
 #include "FBO.h"
+
+#define SHADOW_MAP_WIDTH 2048
+#define SHADOW_MAP_HEIGHT 2048
 
 
 class Vertex
@@ -38,17 +41,17 @@ public:
 };
 
 
-FBO* fbo;
 
 std::vector<Vertex> roomVertices;
 std::vector<Shader*> shaders;
-std::vector<Shader*> postProcessingShaders;
 std::vector<ObjModel*> models;
 int selectedModel = 0;
-int postProcessingShader = 0;
 Texture* gridTexture;
 
 Shader* mainShader;
+
+Shader* shadowMappingShader;
+Shader* shadowMappingDepthShader;
 
 glm::ivec2 screenSize;
 float rotation;
@@ -56,6 +59,36 @@ bool rotating = false;
 int lastTime;
 bool keys[255];
 bool holdMouse = false;
+
+unsigned int depthMapFBO;
+unsigned int depthMap;
+
+void initShadowMapping()
+{
+	//depthMapFBO = new FBO(SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, true, FBO::Type::Depth);
+	glGenFramebuffers(1, &depthMapFBO);
+	glGenTextures(1, &depthMap);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	float borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+	// attach depth texture as FBO's depth buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+}
+
+glm::vec3 lightPos;
+void initLight()
+{
+	lightPos = glm::vec3(0.0f, 5.0f, .0f);
+
+}
 
 
 std::vector<Vertex> buildCube(const glm::vec3& p, const glm::vec3& s)
@@ -71,6 +104,8 @@ std::vector<Vertex> buildCube(const glm::vec3& p, const glm::vec3& s)
 
 
 	std::vector<Vertex> verts;
+	verts.reserve(4);
+
 	//bottom
 	verts.push_back(Vertex(p + glm::vec3(-s.x, -s.y, -s.z), color[0], glm::vec2(0, 0), glm::vec3(0, -1, 0)));
 	verts.push_back(Vertex(p + glm::vec3(s.x, -s.y, -s.z), color[4], glm::vec2(1, 0), glm::vec3(0, -1, 0)));
@@ -102,8 +137,13 @@ void init()
 	mainShader = new Shader("room");
 	shaders.push_back(new Shader("multitex"));
 
+	shadowMappingShader = new Shader("shadow_mapping");
+	shadowMappingDepthShader = new Shader("shadow_mapping_depth");
 
-	postProcessingShaders.push_back(new Shader("pp/simple"));
+	shadowMappingShader->use();
+	shadowMappingShader->setUniform("diffuseTexture", 0);
+	shadowMappingShader->setUniform("shadowMap", 1);
+
 
 
 	//	models.push_back(new ObjModel("gamecube/model_n.obj"));
@@ -128,7 +168,11 @@ void init()
 	roomVertices = buildCube(glm::vec3(0, 10, 0), glm::vec3(10, 10, 10));
 	gridTexture = new Texture("grid.png");
 
-	fbo = new FBO(2048, 2048, true, FBO::Type::Color, FBO::Type::Color);
+	shadowMappingDepthShader->getUniform("lightSpaceMatrix");
+
+	initShadowMapping();
+	initLight();
+
 }
 
 void print_string(std::string text, const glm::mat4& mvp)
@@ -156,22 +200,162 @@ void print_string(std::string text, const glm::mat4& mvp)
 	mainShader->setUniform("tex", 1);
 }
 
-void display()
+unsigned int cubeVAO = 0;
+unsigned int cubeVBO = 0;
+
+// Functie om een kubus te initialiseren
+void initCube() {
+	if (cubeVAO == 0) {
+		float vertices[] = {
+			// Positie              // Kleur (rood)
+			// Achterkant
+			// -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//
+			// // Voorkant
+			// -0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//
+			// // Linkerkant
+			// -0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			// -0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//
+			// // Rechterkant
+			//  0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//
+			//  // Onderkant
+			//  -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//   0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			//   0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//   0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  -0.5f, -0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			//  -0.5f, -0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+
+			 // Bovenkant
+			 -0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			  0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f,
+			  0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			  0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			 -0.5f,  0.5f,  0.5f,   1.0f, 0.0f, 0.0f,
+			 -0.5f,  0.5f, -0.5f,   1.0f, 0.0f, 0.0f
+		};
+
+
+		glGenVertexArrays(1, &cubeVAO);
+		glGenBuffers(1, &cubeVBO);
+		glBindVertexArray(cubeVAO);
+
+		glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+		// Positie attribuut
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		// Kleur attribuut
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
+	}
+}
+
+// Functie om een rode kubus te renderen op een bepaalde positie
+void renderRedCube(const glm::vec3& position) {
+	if (cubeVAO == 0) {
+		initCube();
+	}
+
+	shadowMappingShader->use();
+
+	// Bereid model matrix voor om kubus op de juiste plaats en schaal te zetten
+	glm::mat4 model = glm::mat4(1.0f);
+	model = glm::translate(model, position); // Verplaats naar de positie
+	model = glm::scale(model, glm::vec3(0.1f)); // Schaal naar kleinere grootte
+
+	// Stel de model matrix in op de shader
+	shadowMappingShader->setUniform("model", model);
+
+	glBindVertexArray(cubeVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6); // 36 vertices voor een kubus (6 gezichten * 2 driehoeken * 3 vertices)
+	glBindVertexArray(0);
+}
+
+void saveAsFileBackground(const std::string& fileName, std::function<void()> callback)
 {
-	fbo->bind();
-	glViewport(0, 0, fbo->getWidth(), fbo->getHeight());
-	glEnable(GL_DEPTH_TEST);
+	char* data = new char[SHADOW_MAP_WIDTH * SHADOW_MAP_HEIGHT * 4];
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, data);
+	const int rowSize = SHADOW_MAP_WIDTH * 4;
+	char* row = new char[rowSize];
+	for (int y = 0; y < SHADOW_MAP_HEIGHT / 2; y++)
+	{
+		memcpy(row, data + rowSize * y, rowSize);
+		memcpy(data + rowSize * y, data + rowSize * (SHADOW_MAP_HEIGHT - 1 - y), rowSize);
+		memcpy(data + rowSize * (SHADOW_MAP_HEIGHT - 1 - y), row, rowSize);
+	}
+	std::thread thread([data, fileName, callback]()
+		{
+			if (fileName.substr(fileName.size() - 4) == ".bmp")
+				stbi_write_bmp(fileName.c_str(), SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 4, data);
+			else if (fileName.substr(fileName.size() - 4) == ".tga")
+				stbi_write_tga(fileName.c_str(), SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 4, data);
+			else if (fileName.substr(fileName.size() - 4) == ".png")
+				stbi_write_png(fileName.c_str(), SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 4, data, 4 * SHADOW_MAP_WIDTH);
+			else if (fileName.substr(fileName.size() - 4) == ".jpg")
+				stbi_write_jpg(fileName.c_str(), SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, 4, data, 95);
+			delete[] data;
+			callback();
+		});
+	thread.detach();
+}
+
+void display()
 
 
+{
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glm::mat4 projection = glm::perspective(glm::radians(70.0f), screenSize.x / (float)screenSize.y, 0.01f, 300.0f);
-	//begin met een perspective matrix
-	glm::mat4 view = camera.getMat();
+
+	float near_plane =0.01f, far_plane = 70.5f;
+
+	glm::mat4 lightProjection, lightView;
+	glm::mat4 lightSpaceMatrix;
+
+	lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+	lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 0.0, 0.0));
+	lightSpaceMatrix = lightProjection * lightView;
+	//
+	shadowMappingDepthShader->use();
+	glUniformMatrix4fv(shadowMappingDepthShader->getUniform("lightSpaceMatrix"), 1, 0, glm::value_ptr(lightSpaceMatrix));
+	//shadowMappingDepthShader->setUniform("lightSpaceMatrix", lightSpaceMatrix);
 
 
-	mainShader->use();
-	mainShader->setUniform("tex", 1);
-	mainShader->setUniform("modelViewProjectionMatrix", projection * view);
+
+
+	glViewport(0, 0, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	// mainShader->use();
+	// mainShader->setUniform("tex", 1);
+	// mainShader->setUniform("modelViewProjectionMatrix", lightSpaceMatrix);
+
 	glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].position);
 	//geef aan dat de posities op deze locatie zitten
 	glVertexAttribPointer(1, 4, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].color);
@@ -181,53 +365,74 @@ void display()
 	glVertexAttribPointer(3, 3, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].normal);
 	//geef aan dat de normalen op deze locatie zitten
 	gridTexture->bind();
-	glDrawArrays(GL_QUADS, 0, roomVertices.size()); //en tekenen :)
+	glDrawArrays(GL_QUADS, 0, roomVertices.size());
 
 
 	glm::mat4 modelMatrix = glm::mat4(1);
 	modelMatrix = glm::translate(modelMatrix, glm::vec3(0, 0, 0));
 	modelMatrix = glm::rotate(modelMatrix, rotation, glm::vec3(0, 1, 0));
-	if (selectedModel == 5)
-		modelMatrix = glm::scale(modelMatrix, glm::vec3(0.01f, 0.01f, 0.01f));
-
-	glm::mat4 mvp = projection * view * modelMatrix;
-
-	glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(modelMatrix)));
 
 	models[selectedModel]->draw();
 
-	fbo->unbind();
+
+	auto myCallback = []() {
+		std::cout << "Afbeelding opgeslagen!" << std::endl;
+		// Andere logica kan hier worden toegevoegd
+		};
+
+	saveAsFileBackground("mijnAfbeelding1.png", myCallback);
+
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+
+
 
 	glViewport(0, 0, screenSize.x, screenSize.y);
-
-	fbo->use();
-	glActiveTexture(GL_TEXTURE3);
-	glActiveTexture(GL_TEXTURE0);
-
-	std::vector<glm::vec2> verts;
-	verts.push_back(glm::vec2(-1, -1));
-	verts.push_back(glm::vec2(1, -1));
-	verts.push_back(glm::vec2(1, 1));
-	verts.push_back(glm::vec2(-1, 1));
+	glEnable(GL_DEPTH_TEST);
 
 
-	glDisable(GL_DEPTH_TEST);
-	Shader* shader = postProcessingShaders[postProcessingShader]->isValid()
-		                 ? postProcessingShaders[postProcessingShader]
-		                 : postProcessingShaders[0];
-	shader->use();
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-
-	glUniform1f(shader->getUniform("time"), glutGet(GLUT_ELAPSED_TIME) / 1000.0f);
-	glUniform1i(shader->getUniform("s_texture"), 0);
-	glUniform1i(shader->getUniform("s_texture2"), 1);
-	glUniform1i(shader->getUniform("s_depth"), 2);
-	glUniform1i(shader->getUniform("s_distort"), 3);
-	glVertexAttribPointer(0, 2, GL_FLOAT, false, 2 * 4, &verts[0]); //geef aan dat de posities op deze locatie zitten
-	glDrawArrays(GL_QUADS, 0, verts.size()); //en tekenen :)
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glm::mat4 projection = glm::perspective(glm::radians(70.0f), screenSize.x / (float)screenSize.y, 0.01f, 300.0f);
+	//begin met een perspective matrix
+	glm::mat4 view = camera.getMat();
 
 
+	// mainShader->use();
+	// mainShader->setUniform("tex", 1);
+	// mainShader->setUniform("modelViewProjectionMatrix", projection * view);
+
+	shadowMappingShader->use(); 
+	shadowMappingShader->setUniform("projection", projection);
+	shadowMappingShader->setUniform("view", view);
+	shadowMappingShader->setUniform("viewPos", camera.position);
+	shadowMappingShader->setUniform("lightPos", lightPos);
+	shadowMappingShader->setUniform("lightSpaceMatrix", lightSpaceMatrix);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].position);
+	//geef aan dat de posities op deze locatie zitten
+	glVertexAttribPointer(1, 4, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].color);
+	//geef aan dat de kleuren op deze locatie zitten
+	glVertexAttribPointer(2, 2, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].texcoord);
+	//geef aan dat de texcoords op deze locatie zitten
+	glVertexAttribPointer(3, 3, GL_FLOAT, false, sizeof(Vertex), &roomVertices[0].normal);
+	//geef aan dat de normalen op deze locatie zitten
+	gridTexture->bind();
+	glDrawArrays(GL_QUADS, 0, roomVertices.size());
+
+
+	shadowMappingShader->setUniform("model", modelMatrix);
+
+
+	models[selectedModel]->draw();
+
+	shadowMappingShader->setUniform("projection", projection);
+	shadowMappingShader->setUniform("view", view);
+	shadowMappingShader->setUniform("viewPos", camera.position);
+	shadowMappingShader->setUniform("lightPos", lightPos);
+	shadowMappingShader->setUniform("lightSpaceMatrix", lightSpaceMatrix);
+	// renderRedCube(lightPos);
 	glutSwapBuffers();
 }
 
@@ -247,9 +452,6 @@ void keyboard(unsigned char key, int x, int y)
 		rotating = !rotating;
 	if (key == ']' || key == '[')
 		selectedModel = (selectedModel + (int)models.size() + (key == ']' ? 1 : -1)) % models.size();
-	if (key == ',' || key == '.')
-		postProcessingShader = (postProcessingShader + (int)postProcessingShaders.size() + (key == '.' ? 1 : -1)) %
-			postProcessingShaders.size();
 	if (key == ' ')
 		holdMouse = !holdMouse;
 
@@ -259,6 +461,35 @@ void keyboard(unsigned char key, int x, int y)
 void keyboardUp(unsigned char key, int, int)
 {
 	keys[key] = false;
+}
+
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+void renderQuad()
+{
+	if (quadVAO == 0)
+	{
+		float quadVertices[] = {
+			// positions        // texture Coords
+			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+		};
+		// setup plane VAO
+		glGenVertexArrays(1, &quadVAO);
+		glGenBuffers(1, &quadVBO);
+		glBindVertexArray(quadVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	}
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
 }
 
 
@@ -273,8 +504,6 @@ void update()
 	if (updateTime < 0)
 	{
 		for (auto s : shaders)
-			s->checkForUpdate();
-		for (auto s : postProcessingShaders)
 			s->checkForUpdate();
 		updateTime = 1;
 	}
@@ -329,7 +558,7 @@ int main(int argc, char* argv[])
 	glutInit(&argc, argv);
 	glutInitWindowSize(1900, 1000);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
-	glutCreateWindow("Realtime Shadowmaps");
+	glutCreateWindow("Realtime ShadowMapping");
 
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
@@ -343,3 +572,4 @@ int main(int argc, char* argv[])
 
 	glutMainLoop();
 }
+

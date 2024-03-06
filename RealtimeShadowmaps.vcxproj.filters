@@ -85,5 +85,23 @@
     <None Include="assets\shaders\pp\simple.fs">
       <Filter>assets\postprocessing</Filter>
     </None>
+    <None Include="assets\shaders\room.fs">
+      <Filter>assets\shaders</Filter>
+    </None>
+    <None Include="assets\shaders\room.vs">
+      <Filter>assets\shaders</Filter>
+    </None>
+    <None Include="assets\shaders\shadow_mapping.fs">
+      <Filter>assets\shaders</Filter>
+    </None>
+    <None Include="assets\shaders\shadow_mapping.vs">
+      <Filter>assets\shaders</Filter>
+    </None>
+    <None Include="assets\shaders\shadow_mapping_depth.fs">
+      <Filter>assets\shaders</Filter>
+    </None>
+    <None Include="assets\shaders\shadow_mapping_depth.vs">
+      <Filter>assets\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

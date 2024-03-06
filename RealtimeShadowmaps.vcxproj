@@ -105,6 +105,12 @@
     <None Include="assets\shaders\multitex.vs" />
     <None Include="assets\shaders\pp\simple.fs" />
     <None Include="assets\shaders\pp\simple.vs" />
+    <None Include="assets\shaders\room.fs" />
+    <None Include="assets\shaders\room.vs" />
+    <None Include="assets\shaders\shadow_mapping.fs" />
+    <None Include="assets\shaders\shadow_mapping.vs" />
+    <None Include="assets\shaders\shadow_mapping_depth.fs" />
+    <None Include="assets\shaders\shadow_mapping_depth.vs" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

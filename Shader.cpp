@@ -129,3 +129,8 @@ void Shader::setUniform(const std::string & name, int val)
 {
 	glUniform1i(getUniform(name), val);
 }
+
+void Shader::setUniform(const std::string& name, const glm::vec3& vec)
+{
+	glUniform3fv(getUniform(name), 1, glm::value_ptr(vec));
+}
