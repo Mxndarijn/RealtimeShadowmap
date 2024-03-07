@@ -1,4 +1,4 @@
-/*#version 330
+#version 330
 
 in vec3 a_position;
 in vec3 a_normal;
@@ -29,9 +29,9 @@ texCoord = a_texture;
 	shadowPos = biasMatrix * shadowMatrix * vec4(a_position,1.0);
 	normal = normalMatrix * a_normal;
 	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(a_position,1.0);
-}*/
+}
 
-#version 330
+/*#version 330
 
 layout (location = 0) in vec3 a_position;
 layout (location = 1) in vec3 a_normal;
@@ -47,4 +47,4 @@ void main()
 {
     uvCoords = a_texcoord;
     gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(a_position,1);
-}
+}*/

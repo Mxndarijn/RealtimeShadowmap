@@ -1,4 +1,4 @@
-/*#version 150
+#version 150
 
 uniform sampler2D s_texture;
 uniform sampler2DShadow s_shadowmap;
@@ -47,9 +47,9 @@ void main()
 		discard;
 	fragColor.rgb = visibility * light * tex.rgb;
 	fragColor.a = tex.a;
-}*/
+}
 
-#version 330
+/*#version 330
 
 // retrieve incoming UV coordinate
 in vec2 uvCoords;
@@ -62,4 +62,4 @@ void main() {
 
     // map UV coordinates on gl_FragColor
     gl_FragColor = textureColor;
-}
+}*/

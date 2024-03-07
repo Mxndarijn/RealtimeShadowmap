@@ -265,7 +265,7 @@ void FBO::saveAsFileBackground(const std::string& fileName, std::function<void()
 {
 	char* data = new char[getWidth() * getHeight() * 4];
 	use();
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, data);
 	const int rowSize = getWidth() * 4;
 	char* row = new char[rowSize];
 	for (int y = 0; y < getHeight() / 2; y++)

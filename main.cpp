@@ -110,6 +110,39 @@ void onDebug(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei len
 	std::cout << message << std::endl;
 }
 
+unsigned int cubeVBO, cubeVAO;
+
+void createCubeVAO(const std::vector<Vertex>& verts) {
+	// Genereer en bind VBO
+	glGenBuffers(1, &cubeVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
+
+	// Genereer en bind VAO
+	glGenVertexArrays(1, &cubeVAO);
+	glBindVertexArray(cubeVAO);
+
+	// Zet attribuutpointers op. Hier zijn de locaties aannames.
+	// Positie
+	glEnableVertexAttribArray(0); // Veronderstelt locatie 0 voor positie
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
+
+	// Kleur
+	glEnableVertexAttribArray(1); // Veronderstelt locatie 1 voor kleur
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
+
+	// Texture coördinaten
+	glEnableVertexAttribArray(2); // Veronderstelt locatie 2 voor texture coördinaten
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texcoord));
+
+	// Normaal
+	glEnableVertexAttribArray(3); // Veronderstelt locatie 3 voor normaal
+	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+	// Unbind VAO
+	glBindVertexArray(0);
+}
+
 void init()
 {
 	glewInit();
@@ -162,8 +195,8 @@ void init()
 	rotation = 0;
 	lastTime = glutGet(GLUT_ELAPSED_TIME);
 
-	roomVertices = buildCube(glm::vec3(0, 0, 0), glm::vec3(1, 1, 1));
-	// createCubeVAO(roomVertices);
+	roomVertices = buildCube(glm::vec3(0, 0, 0), glm::vec3(10, 0, 10));
+	createCubeVAO(roomVertices);
 	gridTexture = new Texture("grid.png");
 }
 
@@ -171,6 +204,7 @@ bool takeScreenshot = false;
 
 void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> modelViewCallback)
 {
+	glActiveTexture(GL_TEXTURE0);
 	modelViewCallback(glm::mat4(1));
 	models[selectedModel]->draw();
 
@@ -178,37 +212,11 @@ void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> model
 	modelViewCallback(glm::mat4(1));
 
 
-	// glBindVertexArray(cubeVAO);
-	// gridTexture->bind();
-	// glDrawArrays(GL_TRIANGLES, 0, roomVertices.size());
-	// glBindVertexArray(0);
-	modelViewCallback(glm::mat4(1));
-
-	std::vector<vrlib::gl::VertexP3N3T2> verts;
-	vrlib::gl::VertexP3N3T2 vert;
-	vrlib::gl::setN3(vert, glm::vec3(0, 1, 0));
-	vrlib::gl::setP3(vert, glm::vec3(-10, 0, -10));
-	vrlib::gl::setT2(vert, glm::vec2(0, 0));
-	verts.push_back(vert);
-	vrlib::gl::setP3(vert, glm::vec3(-10, 0, 10));
-	vrlib::gl::setT2(vert, glm::vec2(0, 10));
-	verts.push_back(vert);
-	vrlib::gl::setP3(vert, glm::vec3(10, 0, 10));
-	vrlib::gl::setT2(vert, glm::vec2(10, 10));
-	verts.push_back(vert);
-	vrlib::gl::setP3(vert, glm::vec3(10, 0, -10));
-	vrlib::gl::setT2(vert, glm::vec2(10, 0));
-	verts.push_back(vert);
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
+	glBindVertexArray(cubeVAO);
+	glActiveTexture(GL_TEXTURE0);
 	gridTexture->bind();
-	vrlib::gl::setAttributes<vrlib::gl::VertexP3N3T2>(&verts[0]);
-	glDrawArrays(GL_QUADS, 0, 4);
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-	glDisableVertexAttribArray(2);
+	glDrawArrays(GL_QUADS, 0, roomVertices.size());
+	glBindVertexArray(0);
 }
 
 
@@ -220,7 +228,7 @@ void display()
 	lightDirection += 0.001f;
 
 	glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
-	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, -5, 50);
+	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, -5, 20);
 	glm::mat4 shadowCameraMatrix = glm::lookAt(lightAngle + glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 
 	glDisable(GL_SCISSOR_TEST);
@@ -274,8 +282,7 @@ void display()
 		depthMapFBO->saveAsFileBackground("depthMap.png", callback);
 	}
 	glActiveTexture(GL_TEXTURE1);
-	// glBindTexture(GL_TEXTURE_2D, depthMapFBO->texid[0]);
-	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, depthMapFBO->texid[0]);
 
 	drawScene(1, [&](const glm::mat4& modelMatrix)
 	{
@@ -315,7 +322,7 @@ void keyboardUp(unsigned char key, int, int)
 	keys[key] = false;
 }
 
-
+float minTimeBeforeScreenshot = 0;
 void update()
 {
 	float time = glutGet(GLUT_ELAPSED_TIME);
@@ -325,6 +332,8 @@ void update()
 		rotation += deltaTime * 1.0f;
 
 	float speed = 15;
+	if(minTimeBeforeScreenshot > 0)
+		minTimeBeforeScreenshot -= deltaTime;
 
 	if (keys['d']) camera.move(180, deltaTime * speed);
 	if (keys['a']) camera.move(0, deltaTime * speed);
@@ -334,7 +343,11 @@ void update()
 	if (keys['z']) camera.position.y -= deltaTime * speed;
 	if (keys['p'])
 	{
-		takeScreenshot = true;
+		if(minTimeBeforeScreenshot <= 0)
+		{
+			minTimeBeforeScreenshot = 2;
+			takeScreenshot = true;
+		}
 	}
 	//camera.position = glm::clamp(camera.position, glm::vec3(-9.5, 0.5, -9.5), glm::vec3(9.5, 19.5, 9.5));
 
