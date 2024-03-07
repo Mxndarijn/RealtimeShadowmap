@@ -61,8 +61,6 @@ enum class Uniforms
 };
 
 
-
-
 std::vector<Vertex> roomVertices;
 std::vector<ObjModel*> models;
 int selectedModel = 0;
@@ -84,10 +82,10 @@ bool holdMouse = false;
 std::vector<Vertex> buildCube(const glm::vec3& p, const glm::vec3& s)
 {
 	glm::vec4 color;
-		color.r = rand() / (float)RAND_MAX;
-		color.g = rand() / (float)RAND_MAX;
-		color.b = rand() / (float)RAND_MAX;
-		color.a = 1;
+	color.r = rand() / (float)RAND_MAX;
+	color.g = rand() / (float)RAND_MAX;
+	color.b = rand() / (float)RAND_MAX;
+	color.a = 1;
 
 
 	std::vector<Vertex> verts;
@@ -101,40 +99,6 @@ std::vector<Vertex> buildCube(const glm::vec3& p, const glm::vec3& s)
 
 	return verts;
 }
-
-// unsigned int cubeVBO, cubeVAO;
-//
-// void createCubeVAO(const std::vector<Vertex>& verts) {
-// 	// Genereer en bind VBO
-// 	glGenBuffers(1, &cubeVBO);
-// 	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-// 	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
-//
-// 	// Genereer en bind VAO
-// 	glGenVertexArrays(1, &cubeVAO);
-// 	glBindVertexArray(cubeVAO);
-//
-// 	// Zet attribuutpointers op. Hier zijn de locaties aannames.
-// 	// Positie
-// 	glEnableVertexAttribArray(0); // Veronderstelt locatie 0 voor positie
-// 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), &roomVertices[0].position);
-//
-// 	// Kleur
-// 	glEnableVertexAttribArray(1); // Veronderstelt locatie 1 voor kleur
-// 	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), &roomVertices[0].color);
-//
-// 	// Texture coördinaten
-// 	glEnableVertexAttribArray(2); // Veronderstelt locatie 2 voor texture coördinaten
-// 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), &roomVertices[0].texcoord);
-//
-// 	// Normaal
-// 	glEnableVertexAttribArray(3); // Veronderstelt locatie 3 voor normaal
-// 	glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), &roomVertices[0].normal);
-//
-//
-// 	// Unbind VAO
-// 	glBindVertexArray(0);
-// }
 
 #ifdef WIN32
 void GLAPIENTRY onDebug(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message,
@@ -153,7 +117,8 @@ void init()
 	glEnable(GL_BLEND);
 
 	//Initializing 
-	shadowMappingDepthShader = new Shader<ShadowUniforms>("assets/shaders/shadowmap.vert", "assets/shaders/shadowmap.frag");
+	shadowMappingDepthShader = new Shader<ShadowUniforms>("assets/shaders/shadowmap.vert",
+	                                                      "assets/shaders/shadowmap.frag");
 	shadowMappingDepthShader->bindAttributeLocation("a_position", 0);
 	shadowMappingDepthShader->link();
 	shadowMappingDepthShader->registerUniform(ShadowUniforms::modelMatrix, "modelMatrix");
@@ -200,9 +165,9 @@ void init()
 	roomVertices = buildCube(glm::vec3(0, 0, 0), glm::vec3(1, 1, 1));
 	// createCubeVAO(roomVertices);
 	gridTexture = new Texture("grid.png");
-
-
 }
+
+bool takeScreenshot = false;
 
 void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> modelViewCallback)
 {
@@ -222,10 +187,18 @@ void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> model
 	std::vector<vrlib::gl::VertexP3N3T2> verts;
 	vrlib::gl::VertexP3N3T2 vert;
 	vrlib::gl::setN3(vert, glm::vec3(0, 1, 0));
-	vrlib::gl::setP3(vert, glm::vec3(-10, 0, -10)); vrlib::gl::setT2(vert, glm::vec2(0, 0)); verts.push_back(vert);
-	vrlib::gl::setP3(vert, glm::vec3(-10, 0, 10)); vrlib::gl::setT2(vert, glm::vec2(0, 10)); verts.push_back(vert);
-	vrlib::gl::setP3(vert, glm::vec3(10, 0, 10)); vrlib::gl::setT2(vert, glm::vec2(10, 10)); verts.push_back(vert);
-	vrlib::gl::setP3(vert, glm::vec3(10, 0, -10)); vrlib::gl::setT2(vert, glm::vec2(10, 0)); verts.push_back(vert);
+	vrlib::gl::setP3(vert, glm::vec3(-10, 0, -10));
+	vrlib::gl::setT2(vert, glm::vec2(0, 0));
+	verts.push_back(vert);
+	vrlib::gl::setP3(vert, glm::vec3(-10, 0, 10));
+	vrlib::gl::setT2(vert, glm::vec2(0, 10));
+	verts.push_back(vert);
+	vrlib::gl::setP3(vert, glm::vec3(10, 0, 10));
+	vrlib::gl::setT2(vert, glm::vec2(10, 10));
+	verts.push_back(vert);
+	vrlib::gl::setP3(vert, glm::vec3(10, 0, -10));
+	vrlib::gl::setT2(vert, glm::vec2(10, 0));
+	verts.push_back(vert);
 
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
@@ -264,10 +237,10 @@ void display()
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
 	drawScene(0, [&](const glm::mat4& modelMatrix)
-		{
-			// std::cout << "Settings matrix" << std::endl;
-			shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, modelMatrix);
-		});
+	{
+		// std::cout << "Settings matrix" << std::endl;
+		shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, modelMatrix);
+	});
 	depthMapFBO->unbind();
 
 	glViewport(0, 0, screenSize.x, screenSize.y);
@@ -290,14 +263,24 @@ void display()
 	shadowMappingShader->setUniform(Uniforms::textureFactor, 1.0f);
 	shadowMappingShader->setUniform(Uniforms::diffuseColor, glm::vec4(1, 1, 1, 1));
 
+	if (takeScreenshot)
+	{
+		takeScreenshot = false;
+		std::cout << "Taking screenshot" << std::endl;
+		const std::function<void()> callback = []()
+		{
+			std::cout << "Screenshot saved." << std::endl;
+		};
+		depthMapFBO->saveAsFileBackground("depthMap.png", callback);
+	}
 	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, depthMapFBO->texid[0]);
+	// glBindTexture(GL_TEXTURE_2D, depthMapFBO->texid[0]);
 	glActiveTexture(GL_TEXTURE0);
 
 	drawScene(1, [&](const glm::mat4& modelMatrix)
-		{
-			shadowMappingShader->setUniform(Uniforms::modelMatrix, modelMatrix);
-		});
+	{
+		shadowMappingShader->setUniform(Uniforms::modelMatrix, modelMatrix);
+	});
 
 	glDisable(GL_SCISSOR_TEST);
 
@@ -332,6 +315,7 @@ void keyboardUp(unsigned char key, int, int)
 	keys[key] = false;
 }
 
+
 void update()
 {
 	float time = glutGet(GLUT_ELAPSED_TIME);
@@ -348,6 +332,10 @@ void update()
 	if (keys['s']) camera.move(270, deltaTime * speed);
 	if (keys['q']) camera.position.y += deltaTime * speed;
 	if (keys['z']) camera.position.y -= deltaTime * speed;
+	if (keys['p'])
+	{
+		takeScreenshot = true;
+	}
 	//camera.position = glm::clamp(camera.position, glm::vec3(-9.5, 0.5, -9.5), glm::vec3(9.5, 19.5, 9.5));
 
 
@@ -401,4 +389,3 @@ int main(int argc, char* argv[])
 
 	glutMainLoop();
 }
-

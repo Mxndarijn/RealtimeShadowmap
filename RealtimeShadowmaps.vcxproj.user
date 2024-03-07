@@ -3,6 +3,6 @@
   <PropertyGroup>
     <NXTargetSerialNumber>Default</NXTargetSerialNumber>
     <NXTargetName>Default</NXTargetName>
-    <ShowAllFiles>false</ShowAllFiles>
+    <ShowAllFiles>true</ShowAllFiles>
   </PropertyGroup>
 </Project>

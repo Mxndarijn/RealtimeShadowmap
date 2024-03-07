@@ -3,8 +3,16 @@
 #include <string>
 #include <functional>
 
+#ifdef ANDROID
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#else
 #include <GL/glew.h>
+#endif
+
+#ifdef WIN32
 #include <windows.h>
+#endif
 
 class FBO
 {
@@ -13,9 +21,11 @@ class FBO
 	GLuint depthBuffer;
 	GLuint depthTexture;
 	int textureCount;
+
 public:
 	GLuint fboId;
 	GLint oldFBO;
+
 	enum Type
 	{
 		Color,
@@ -39,12 +49,11 @@ public:
 	void use(int offset = 0);
 
 	Type types[5];
-	GLuint texid[5];	//5 should be big enough
+	GLuint texid[5]; //5 should be big enough
 
 	int getHeight();
 	int getWidth();
 
-	void saveAsFile(const std::string &fileName);
-	void saveAsFileBackground(const std::string &fileName, std::function<void()> callback);
-
+	void saveAsFile(const std::string& fileName);
+	void saveAsFileBackground(const std::string& fileName, std::function<void()> callback);
 };

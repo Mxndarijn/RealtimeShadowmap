@@ -5,7 +5,6 @@
 #include <thread>
 
 
-
 FBO::FBO(int width, int height, bool depth /*= false*/, int textureCount, bool hasDepthTexture)
 {
 	this->depthTexture = 0;
@@ -27,14 +26,12 @@ FBO::FBO(int width, int height, bool depth /*= false*/, int textureCount, bool h
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, texid[i], 0);
 	}
-
-
 
 
 	if (depth)
@@ -42,7 +39,7 @@ FBO::FBO(int width, int height, bool depth /*= false*/, int textureCount, bool h
 		glGenRenderbuffers(1, &depthBuffer);
 		glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
 #ifdef ANDROID
-		glRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
+				glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
 #else
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
 #endif
@@ -61,11 +58,11 @@ FBO::FBO(int width, int height, bool depth /*= false*/, int textureCount, bool h
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
 
-		float color[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		float color[] = {1.0f, 1.0f, 1.0f, 1.0f};
 		glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, color);
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texid[textureCount], 0);
-		if(textureCount == 0)
+		if (textureCount == 0)
 			glDrawBuffer(GL_NONE); // No color buffer is drawn to.
 
 		depthTexture = texid[textureCount];
@@ -88,7 +85,7 @@ FBO::FBO(int width, int height, bool hasDepthTexture, Type buf1, Type buf2, Type
 	glGenFramebuffers(1, &fboId);
 	glBindFramebuffer(GL_FRAMEBUFFER, fboId);
 
-	Type textures[] = { buf1, buf2, buf3, buf4 };
+	Type textures[] = {buf1, buf2, buf3, buf4};
 	textureCount = 0;
 	for (int i = 0; i < 4; i++)
 	{
@@ -96,7 +93,8 @@ FBO::FBO(int width, int height, bool hasDepthTexture, Type buf1, Type buf2, Type
 			continue;
 		types[i] = textures[i];
 		if (textures[i] == Type::ShadowCube)
-		{//http://ogldev.atspace.co.uk/www/tutorial43/tutorial43.html
+		{
+			//http://ogldev.atspace.co.uk/www/tutorial43/tutorial43.html
 			glGenTextures(1, &texid[i]);
 			glBindTexture(GL_TEXTURE_CUBE_MAP, texid[i]);
 			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -135,7 +133,7 @@ FBO::FBO(int width, int height, bool hasDepthTexture, Type buf1, Type buf2, Type
 	glGenRenderbuffers(1, &depthBuffer);
 	glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
 #ifdef ANDROID
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
 #else
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, width, height);
 #endif
@@ -146,16 +144,16 @@ FBO::FBO(int width, int height, bool hasDepthTexture, Type buf1, Type buf2, Type
 		glGenTextures(1, &texid[textureCount]);
 		depthTexture = texid[textureCount];
 		glBindTexture(GL_TEXTURE_2D, texid[textureCount]);
-//				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+		//				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-//TODO: either pick one of these depending on if the hasDepthTexture is for a shadow or depth
-//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+		//TODO: either pick one of these depending on if the hasDepthTexture is for a shadow or depth
+		//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+		//		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
 		glTexParameteri(GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY);
 
@@ -170,7 +168,6 @@ FBO::FBO(int width, int height, bool hasDepthTexture, Type buf1, Type buf2, Type
 
 FBO::~FBO()
 {
-
 }
 
 void FBO::bind()
@@ -179,7 +176,7 @@ void FBO::bind()
 	glBindFramebuffer(GL_FRAMEBUFFER, fboId);
 	if (depthBuffer > 0)
 		glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-	static GLenum buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+	static GLenum buffers[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
 	if (textureCount > 0)
 		glDrawBuffers(textureCount, buffers);
 }
@@ -193,7 +190,8 @@ void FBO::bind(int index)
 		glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
 	//if (textureCount == 0)
 	glDrawBuffer(GL_COLOR_ATTACHMENT0); // No color buffer is drawn to.
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X+index, texid[0], 0); //TODO: texid[0] should be the right texid
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + index, texid[0], 0);
+	//TODO: texid[0] should be the right texid
 }
 
 void FBO::unbind()
@@ -203,12 +201,12 @@ void FBO::unbind()
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	if (oldFBO == 0)
 	{
-		static GLenum buffers[] = { GL_BACK };
+		static GLenum buffers[] = {GL_BACK};
 		glDrawBuffers(1, buffers);
 	}
-	else if(oldFBO != -1)
+	else if (oldFBO != -1)
 	{
-		static GLenum buffers[] = { GL_COLOR_ATTACHMENT0 };
+		static GLenum buffers[] = {GL_COLOR_ATTACHMENT0};
 		glDrawBuffers(1, buffers);
 	}
 	oldFBO = -1;
@@ -226,9 +224,8 @@ void FBO::use(int offset)
 		glActiveTexture(GL_TEXTURE0 + textureCount + offset);
 		glBindTexture(GL_TEXTURE_2D, texid[textureCount]);
 	}
-	if(textureCount > 1 || depthTexture > 0)
+	if (textureCount > 1 || depthTexture > 0)
 		glActiveTexture(GL_TEXTURE0);
-
 }
 
 int FBO::getHeight()
@@ -241,7 +238,7 @@ int FBO::getWidth()
 	return width;
 }
 
-void FBO::saveAsFile(const std::string &fileName)
+void FBO::saveAsFile(const std::string& fileName)
 {
 	char* data = new char[getWidth() * getHeight() * 4];
 	use();
@@ -252,7 +249,7 @@ void FBO::saveAsFile(const std::string &fileName)
 	{
 		memcpy(row, data + rowSize * y, rowSize);
 		memcpy(data + rowSize * y, data + rowSize * (getHeight() - 1 - y), rowSize);
-		memcpy(data + rowSize * (getHeight()-1-y), row, rowSize);
+		memcpy(data + rowSize * (getHeight() - 1 - y), row, rowSize);
 	}
 
 	if (fileName.substr(fileName.size() - 4) == ".bmp")
@@ -261,11 +258,10 @@ void FBO::saveAsFile(const std::string &fileName)
 		stbi_write_tga(fileName.c_str(), getWidth(), getHeight(), 4, data);
 	else if (fileName.substr(fileName.size() - 4) == ".png")
 		stbi_write_png(fileName.c_str(), getWidth(), getHeight(), 4, data, 4 * getWidth());
-	else if (fileName.substr(fileName.size() - 4) == ".jpg")
-		stbi_write_jpg(fileName.c_str(), getWidth(), getHeight(), 4, data, 95);
 	delete[] data;
 }
-void FBO::saveAsFileBackground(const std::string &fileName, std::function<void()> callback)
+
+void FBO::saveAsFileBackground(const std::string& fileName, std::function<void()> callback)
 {
 	char* data = new char[getWidth() * getHeight() * 4];
 	use();
@@ -286,8 +282,6 @@ void FBO::saveAsFileBackground(const std::string &fileName, std::function<void()
 			stbi_write_tga(fileName.c_str(), getWidth(), getHeight(), 4, data);
 		else if (fileName.substr(fileName.size() - 4) == ".png")
 			stbi_write_png(fileName.c_str(), getWidth(), getHeight(), 4, data, 4 * getWidth());
-		else if (fileName.substr(fileName.size() - 4) == ".jpg")
-			stbi_write_jpg(fileName.c_str(), getWidth(), getHeight(), 4, data, 95);
 		delete[] data;
 		callback();
 	});
