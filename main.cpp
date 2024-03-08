@@ -57,7 +57,8 @@ enum class Uniforms
 	s_texture,
 	s_shadowmap,
 	diffuseColor,
-	textureFactor
+	textureFactor,
+	lightPos
 };
 
 
@@ -66,8 +67,10 @@ std::vector<ObjModel*> models;
 int selectedModel = 0;
 Texture* gridTexture;
 
-Shader<Uniforms>* shadowMappingShader;
 Shader<ShadowUniforms>* shadowMappingDepthShader;
+
+std::vector<Shader<Uniforms>*> shaders;
+int selectedShader = 0;
 
 FBO* depthMapFBO;
 
@@ -112,7 +115,8 @@ void onDebug(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei len
 
 unsigned int cubeVBO, cubeVAO;
 
-void createCubeVAO(const std::vector<Vertex>& verts) {
+void createCubeVAO(const std::vector<Vertex>& verts)
+{
 	// Genereer en bind VBO
 	glGenBuffers(1, &cubeVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
@@ -143,6 +147,25 @@ void createCubeVAO(const std::vector<Vertex>& verts) {
 	glBindVertexArray(0);
 }
 
+void setupShader(Shader<Uniforms>* shader)
+{
+	shader->bindAttributeLocation("a_position", 0);
+	shader->bindAttributeLocation("a_normal", 1);
+	shader->bindAttributeLocation("a_texcoord", 2);
+	shader->link();
+	shader->bindFragLocation("fragColor", 0);
+	shader->registerUniform(Uniforms::modelMatrix, "modelMatrix");
+	shader->registerUniform(Uniforms::projectionMatrix, "projectionMatrix");
+	shader->registerUniform(Uniforms::viewMatrix, "viewMatrix");
+	shader->registerUniform(Uniforms::shadowMatrix, "shadowMatrix");
+	shader->registerUniform(Uniforms::s_texture, "s_texture");
+	shader->registerUniform(Uniforms::s_shadowmap, "s_shadowmap");
+	shader->registerUniform(Uniforms::lightPos, "lightPos");
+	shader->use();
+	shader->setUniform(Uniforms::s_texture, 0);
+	shader->setUniform(Uniforms::s_shadowmap, 1);
+}
+
 void init()
 {
 	glewInit();
@@ -150,8 +173,8 @@ void init()
 	glEnable(GL_BLEND);
 
 	//Initializing 
-	shadowMappingDepthShader = new Shader<ShadowUniforms>("assets/shaders/shadowmap.vert",
-	                                                      "assets/shaders/shadowmap.frag");
+	shadowMappingDepthShader = new Shader<ShadowUniforms>("assets/shaders/depthMapping/shadowmap.vert",
+	                                                      "assets/shaders/depthMapping/shadowmap.frag");
 	shadowMappingDepthShader->bindAttributeLocation("a_position", 0);
 	shadowMappingDepthShader->link();
 	shadowMappingDepthShader->registerUniform(ShadowUniforms::modelMatrix, "modelMatrix");
@@ -159,23 +182,16 @@ void init()
 	shadowMappingDepthShader->registerUniform(ShadowUniforms::viewMatrix, "viewMatrix");
 	shadowMappingDepthShader->use();
 
-	shadowMappingShader = new Shader<Uniforms>("assets/shaders/default.vert", "assets/shaders/default.frag");
-	shadowMappingShader->bindAttributeLocation("a_position", 0);
-	shadowMappingShader->bindAttributeLocation("a_normal", 1);
-	shadowMappingShader->bindAttributeLocation("a_texcoord", 2);
-	shadowMappingShader->link();
-	shadowMappingShader->bindFragLocation("fragColor", 0);
-	shadowMappingShader->registerUniform(Uniforms::modelMatrix, "modelMatrix");
-	shadowMappingShader->registerUniform(Uniforms::projectionMatrix, "projectionMatrix");
-	shadowMappingShader->registerUniform(Uniforms::viewMatrix, "viewMatrix");
-	shadowMappingShader->registerUniform(Uniforms::shadowMatrix, "shadowMatrix");
-	shadowMappingShader->registerUniform(Uniforms::s_texture, "s_texture");
-	shadowMappingShader->registerUniform(Uniforms::diffuseColor, "diffuseColor");
-	shadowMappingShader->registerUniform(Uniforms::textureFactor, "textureFactor");
-	shadowMappingShader->registerUniform(Uniforms::s_shadowmap, "s_shadowmap");
-	shadowMappingShader->use();
-	shadowMappingShader->setUniform(Uniforms::s_texture, 0);
-	shadowMappingShader->setUniform(Uniforms::s_shadowmap, 1);
+	shaders.push_back(new Shader<Uniforms>("assets/shaders/onlyShadowMapping/default.vert",
+	                                       "assets/shaders/onlyShadowMapping/default.frag"));
+	shaders.push_back(new Shader<Uniforms>("assets/shaders/shadowMappingWithBias/bias.vert",
+	                                       "assets/shaders/shadowMappingWithBias/bias.frag"));
+
+	for (int i = 0; i < shaders.size(); i++)
+	{
+		setupShader(shaders[i]);
+	}
+
 
 	depthMapFBO = new FBO(SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, false, 0, true);
 
@@ -183,6 +199,7 @@ void init()
 	//	models.push_back(new ObjModel("gamecube/model_n.obj"));
 	models.push_back(new ObjModel("statue/statue.obj"));
 	models.push_back(new ObjModel("cube/cube.obj"));
+	models.push_back(new ObjModel("spongebob/spongebob.obj"));
 
 	//
 	if (glDebugMessageCallback)
@@ -195,7 +212,7 @@ void init()
 	rotation = 0;
 	lastTime = glutGet(GLUT_ELAPSED_TIME);
 
-	roomVertices = buildCube(glm::vec3(0, 0, 0), glm::vec3(10, 0, 10));
+	roomVertices = buildCube(glm::vec3(0, 0, 0), glm::vec3(30, 0, 30));
 	createCubeVAO(roomVertices);
 	gridTexture = new Texture("grid.png");
 }
@@ -228,7 +245,7 @@ void display()
 	lightDirection += 0.001f;
 
 	glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
-	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, -5, 20);
+	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, -5, 10);
 	glm::mat4 shadowCameraMatrix = glm::lookAt(lightAngle + glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 
 	glDisable(GL_SCISSOR_TEST);
@@ -243,13 +260,14 @@ void display()
 	glViewport(0, 0, depthMapFBO->getWidth(), depthMapFBO->getHeight());
 	glClearColor(1, 0, 0, 1);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-
+	glCullFace(GL_FRONT);
 	drawScene(0, [&](const glm::mat4& modelMatrix)
 	{
 		// std::cout << "Settings matrix" << std::endl;
 		shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, modelMatrix);
 	});
 	depthMapFBO->unbind();
+	glCullFace(GL_BACK);
 
 	glViewport(0, 0, screenSize.x, screenSize.y);
 	glEnable(GL_SCISSOR_TEST);
@@ -263,13 +281,12 @@ void display()
 	glm::mat4 projection = glm::perspective(glm::radians(70.0f), screenSize.x / (float)screenSize.y, 0.01f, 300.0f);
 	glm::mat4 view = camera.getMat();
 
-	shadowMappingShader->use();
-	shadowMappingShader->setUniform(Uniforms::projectionMatrix, projection);
-	shadowMappingShader->setUniform(Uniforms::viewMatrix, view);
-	shadowMappingShader->setUniform(Uniforms::modelMatrix, modelMatrix);
-	shadowMappingShader->setUniform(Uniforms::shadowMatrix, shadowProjectionMatrix * shadowCameraMatrix);
-	shadowMappingShader->setUniform(Uniforms::textureFactor, 1.0f);
-	shadowMappingShader->setUniform(Uniforms::diffuseColor, glm::vec4(1, 1, 1, 1));
+	shaders[selectedShader]->use();
+	shaders[selectedShader]->setUniform(Uniforms::projectionMatrix, projection);
+	shaders[selectedShader]->setUniform(Uniforms::viewMatrix, view);
+	shaders[selectedShader]->setUniform(Uniforms::modelMatrix, modelMatrix);
+	shaders[selectedShader]->setUniform(Uniforms::shadowMatrix, shadowProjectionMatrix * shadowCameraMatrix);
+	shaders[selectedShader]->setUniform(Uniforms::lightPos, lightAngle);
 
 	if (takeScreenshot)
 	{
@@ -286,7 +303,7 @@ void display()
 
 	drawScene(1, [&](const glm::mat4& modelMatrix)
 	{
-		shadowMappingShader->setUniform(Uniforms::modelMatrix, modelMatrix);
+		shaders[selectedShader]->setUniform(Uniforms::modelMatrix, modelMatrix);
 	});
 
 	glDisable(GL_SCISSOR_TEST);
@@ -313,7 +330,15 @@ void keyboard(unsigned char key, int x, int y)
 		selectedModel = (selectedModel + (int)models.size() + (key == ']' ? 1 : -1)) % models.size();
 	if (key == ' ')
 		holdMouse = !holdMouse;
-
+	if (key == ',' || key == '.')
+	{
+		std::cout << "switching shader" << std::endl;
+		selectedShader = (selectedShader + (int)shaders.size() + (keys['.'] ? 1 : -1)) % shaders.size();
+	}
+	if (key == 'p')
+	{
+		takeScreenshot = true;
+	}
 	keys[key] = true;
 }
 
@@ -322,7 +347,6 @@ void keyboardUp(unsigned char key, int, int)
 	keys[key] = false;
 }
 
-float minTimeBeforeScreenshot = 0;
 void update()
 {
 	float time = glutGet(GLUT_ELAPSED_TIME);
@@ -332,8 +356,6 @@ void update()
 		rotation += deltaTime * 1.0f;
 
 	float speed = 15;
-	if(minTimeBeforeScreenshot > 0)
-		minTimeBeforeScreenshot -= deltaTime;
 
 	if (keys['d']) camera.move(180, deltaTime * speed);
 	if (keys['a']) camera.move(0, deltaTime * speed);
@@ -341,14 +363,6 @@ void update()
 	if (keys['s']) camera.move(270, deltaTime * speed);
 	if (keys['q']) camera.position.y += deltaTime * speed;
 	if (keys['z']) camera.position.y -= deltaTime * speed;
-	if (keys['p'])
-	{
-		if(minTimeBeforeScreenshot <= 0)
-		{
-			minTimeBeforeScreenshot = 2;
-			takeScreenshot = true;
-		}
-	}
 	//camera.position = glm::clamp(camera.position, glm::vec3(-9.5, 0.5, -9.5), glm::vec3(9.5, 19.5, 9.5));
 
 

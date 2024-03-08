@@ -372,7 +372,7 @@ void ObjModel::draw(Texture* texOverride)
 			material->bumpMap->bind();
 		else
 			material->texture->bind();
-		glActiveTexture(GL_TEXTURE1);
+		glActiveTexture(GL_TEXTURE0);
 
 		glDrawArrays(GL_TRIANGLES, group->start, group->end - group->start);
 	}
