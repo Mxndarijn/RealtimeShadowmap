@@ -64,10 +64,12 @@ enum class Uniforms
 
 std::vector<Vertex> roomVertices;
 std::vector<ObjModel*> models;
+ObjModel* sun;
 int selectedModel = 0;
 Texture* gridTexture;
 
 Shader<ShadowUniforms>* shadowMappingDepthShader;
+Shader<Uniforms>* defaultDrawShader;
 
 std::vector<Shader<Uniforms>*> shaders;
 int selectedShader = 0;
@@ -182,6 +184,7 @@ void init()
 	//Initializing 
 	shadowMappingDepthShader = new Shader<ShadowUniforms>("assets/shaders/depthMapping/shadowmap.vert",
 	                                                      "assets/shaders/depthMapping/shadowmap.frag");
+	
 	shadowMappingDepthShader->bindAttributeLocation("a_position", 0);
 	shadowMappingDepthShader->link();
 	shadowMappingDepthShader->registerUniform(ShadowUniforms::modelMatrix, "modelMatrix");
@@ -197,6 +200,21 @@ void init()
 	shaders.push_back(new Shader<Uniforms>("assets/shaders/shadowMappingWithPCF/pcf.vert",
 	                                       "assets/shaders/shadowMappingWithPCF/pcf.frag"));
 
+	defaultDrawShader = new Shader<Uniforms>("assets/shaders/defaultDraw/default.vert",
+		"assets/shaders/defaultDraw/default.frag");
+	defaultDrawShader->bindAttributeLocation("a_position", 0);
+	defaultDrawShader->bindAttributeLocation("a_normal", 1);
+	defaultDrawShader->bindAttributeLocation("a_texcoord", 2);
+	defaultDrawShader->link();
+	defaultDrawShader->bindFragLocation("fragColor", 0);
+	defaultDrawShader->registerUniform(Uniforms::modelMatrix, "modelMatrix");
+	defaultDrawShader->registerUniform(Uniforms::projectionMatrix, "projectionMatrix");
+	defaultDrawShader->registerUniform(Uniforms::viewMatrix, "viewMatrix");
+	defaultDrawShader->registerUniform(Uniforms::s_texture, "s_texture");
+	defaultDrawShader->use();
+	defaultDrawShader->setUniform(Uniforms::s_texture, 0);
+	defaultDrawShader->setUniform(Uniforms::s_shadowmap, 1);
+
 	for (int i = 0; i < shaders.size(); i++)
 	{
 		setupShader(shaders[i]);
@@ -210,6 +228,7 @@ void init()
 	models.push_back(new ObjModel("statue/statue.obj"));
 	models.push_back(new ObjModel("cube/cube.obj"));
 	models.push_back(new ObjModel("spongebob/spongebob.obj"));
+	sun = new ObjModel("sun/sun.obj");
 
 	//
 	if (glDebugMessageCallback)
@@ -228,8 +247,9 @@ void init()
 }
 
 bool takeScreenshot = false;
+static float lightDirection = 0;
 
-void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> modelViewCallback)
+void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> modelViewCallback, glm::mat4& projection, glm::mat4& view)
 {
 	glActiveTexture(GL_TEXTURE0);
 	modelViewCallback(glm::mat4(1));
@@ -244,6 +264,24 @@ void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> model
 	gridTexture->bind();
 	glDrawArrays(GL_TRIANGLES, 0, roomVertices.size());
 	glBindVertexArray(0);
+
+	if(pass == 1)
+	{
+
+		glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
+
+		glm::mat4 sunModelMatrix = glm::mat4(1);
+		sunModelMatrix = glm::translate(sunModelMatrix, lightAngle);
+		sunModelMatrix = glm::rotate(sunModelMatrix, rotation, glm::vec3(0, 1, 0));
+		sunModelMatrix = glm::scale(sunModelMatrix, glm::vec3(0.2, 0.2,0.2));
+
+		defaultDrawShader->use();
+		defaultDrawShader->setUniform(Uniforms::projectionMatrix, projection);
+		defaultDrawShader->setUniform(Uniforms::viewMatrix, view);
+		defaultDrawShader->setUniform(Uniforms::modelMatrix, sunModelMatrix);
+
+		sun->draw();
+	}
 }
 
 
@@ -251,14 +289,13 @@ void display()
 {
 	// std::cout << "Display" << std::endl;
 	float fac = 10.0f;
-	static float lightDirection = 0;
-	if(rotating)
+	if (rotating)
 	{
 		lightDirection += 0.001f;
 	}
 
 	glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
-	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, -5, 10);
+	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, 0.001, 10);
 	glm::mat4 shadowCameraMatrix = glm::lookAt(lightAngle + glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 
 	glDisable(GL_SCISSOR_TEST);
@@ -278,7 +315,7 @@ void display()
 	{
 		// std::cout << "Settings matrix" << std::endl;
 		shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, modelMatrix);
-	});
+	}, glm::mat4(), glm::mat4());
 	depthMapFBO->unbind();
 	glCullFace(GL_BACK);
 
@@ -299,7 +336,7 @@ void display()
 	shaders[selectedShader]->setUniform(Uniforms::viewMatrix, view);
 	shaders[selectedShader]->setUniform(Uniforms::modelMatrix, modelMatrix);
 	shaders[selectedShader]->setUniform(Uniforms::shadowMatrix, shadowProjectionMatrix * shadowCameraMatrix);
-	shaders[selectedShader]->setUniform(Uniforms::lightPos,  lightAngle);
+	shaders[selectedShader]->setUniform(Uniforms::lightPos, lightAngle);
 
 	if (takeScreenshot)
 	{
@@ -317,7 +354,7 @@ void display()
 	drawScene(1, [&](const glm::mat4& modelMatrix)
 	{
 		shaders[selectedShader]->setUniform(Uniforms::modelMatrix, modelMatrix);
-	});
+	}, projection, view);
 
 	glDisable(GL_SCISSOR_TEST);
 
@@ -333,7 +370,6 @@ void reshape(int newWidth, int newHeight)
 	glutPostRedisplay();
 }
 
-float minTimeBeforeShaderSwitch = 1;
 
 void keyboard(unsigned char key, int x, int y)
 {
@@ -347,12 +383,8 @@ void keyboard(unsigned char key, int x, int y)
 		holdMouse = !holdMouse;
 	if (key == ',' || key == '.')
 	{
-		if(minTimeBeforeShaderSwitch <= 0)
-		{
-			minTimeBeforeShaderSwitch = 1;
-			std::cout << "switching shader" << std::endl;
-			selectedShader = (selectedShader + (int)shaders.size() + (key == '.' ? 1 : -1)) % shaders.size();
-		}
+		std::cout << "switching shader" << std::endl;
+		selectedShader = (selectedShader + (int)shaders.size() + (key == '.' ? 1 : -1)) % shaders.size();
 	}
 	if (key == 'p')
 	{
@@ -375,7 +407,6 @@ void update()
 		rotation += deltaTime * 1.0f;
 
 	float speed = 15;
-	minTimeBeforeShaderSwitch -= deltaTime;
 
 	if (keys['d']) camera.move(180, deltaTime * speed);
 	if (keys['a']) camera.move(0, deltaTime * speed);
