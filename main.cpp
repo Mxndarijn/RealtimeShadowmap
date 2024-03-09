@@ -395,23 +395,27 @@ void display()
 		lightsFBO[0]->saveAsFileBackground("depthMap.png", callback);
 	}
 
-	for (int i = 0; i < lights.size(); i++)
+	for (int i = 0; i < maxAmountOfLights; i++)
 	{
 		switch (i)
 		{
 		case 0:
+			if(i < lights.size())
 			shaders[selectedShader]->setUniform(Uniforms::shadowMatrix, shadowMatrics[i]);
 			glActiveTexture(GL_TEXTURE1);
 			break;
 		case 1:
+			if (i < lights.size())
 			shaders[selectedShader]->setUniform(Uniforms::shadowMatrix1, shadowMatrics[i]);
 			glActiveTexture(GL_TEXTURE2);
 			break;
 		case 2:
+			if (i < lights.size())
 			shaders[selectedShader]->setUniform(Uniforms::shadowMatrix2, shadowMatrics[i]);
 			glActiveTexture(GL_TEXTURE3);
 			break;
 		case 3:
+			if (i < lights.size())
 			shaders[selectedShader]->setUniform(Uniforms::shadowMatrix3, shadowMatrics[i]);
 			glActiveTexture(GL_TEXTURE4);
 			break;
