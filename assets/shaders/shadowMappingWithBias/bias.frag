@@ -8,7 +8,7 @@ in vec3 normal;
 in vec4 shadowPos;
 out vec4 fragColor;
 
-uniform vec4 lightPos;
+uniform vec3 lightPos;
 
 void main()
 {
@@ -20,10 +20,12 @@ void main()
     projCoords = projCoords * 0.5 + 0.5;
 
 	//Calculate depth
-	float closestDepth = texture( s_shadowmap, vec3(shadowPos.xy,  (shadowPos.z)/shadowPos.w));
-	float currentDepth = projCoords.z;
+	float bias = 0.005;
 
-	float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
+	float closestDepth = texture( s_shadowmap, vec3(shadowPos.xy,  (shadowPos.z - bias)/shadowPos.w));
+	float currentDepth = shadowPos.z;
+
+	float shadow = currentDepth >= closestDepth  ? 1.0 : 0.0;
 	if(projCoords.z > 1.0)
         shadow = 0.0;
 

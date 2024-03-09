@@ -71,37 +71,24 @@
     <ClInclude Include="stb_image_write.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Vertex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="assets\shaders\multitex.fs">
-      <Filter>assets\shaders</Filter>
-    </None>
-    <None Include="assets\shaders\multitex.vs">
-      <Filter>assets\shaders</Filter>
-    </None>
     <None Include="assets\shaders\pp\simple.vs">
       <Filter>assets\postprocessing</Filter>
     </None>
     <None Include="assets\shaders\pp\simple.fs">
       <Filter>assets\postprocessing</Filter>
     </None>
-    <None Include="assets\shaders\room.fs">
-      <Filter>assets\shaders</Filter>
-    </None>
-    <None Include="assets\shaders\room.vs">
-      <Filter>assets\shaders</Filter>
-    </None>
-    <None Include="assets\shaders\shadow_mapping.fs">
-      <Filter>assets\shaders</Filter>
-    </None>
-    <None Include="assets\shaders\shadow_mapping.vs">
-      <Filter>assets\shaders</Filter>
-    </None>
-    <None Include="assets\shaders\shadow_mapping_depth.fs">
-      <Filter>assets\shaders</Filter>
-    </None>
-    <None Include="assets\shaders\shadow_mapping_depth.vs">
-      <Filter>assets\shaders</Filter>
-    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="RealtimeShadowmap.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

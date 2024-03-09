@@ -95,10 +95,16 @@ std::vector<Vertex> buildCube(const glm::vec3& p, const glm::vec3& s)
 	verts.reserve(4);
 
 	//bottom
+	// Eerste driehoek (eerste drie punten van de quad)
 	verts.push_back(Vertex(p + glm::vec3(-s.x, -s.y, -s.z), color, glm::vec2(0, 0), glm::vec3(0, -1, 0)));
 	verts.push_back(Vertex(p + glm::vec3(s.x, -s.y, -s.z), color, glm::vec2(1, 0), glm::vec3(0, -1, 0)));
 	verts.push_back(Vertex(p + glm::vec3(s.x, -s.y, s.z), color, glm::vec2(1, 1), glm::vec3(0, -1, 0)));
+
+	// Tweede driehoek (eerste, derde en een nieuw vierde punt)
+	verts.push_back(Vertex(p + glm::vec3(-s.x, -s.y, -s.z), color, glm::vec2(0, 0), glm::vec3(0, -1, 0)));
+	verts.push_back(Vertex(p + glm::vec3(s.x, -s.y, s.z), color, glm::vec2(1, 1), glm::vec3(0, -1, 0)));
 	verts.push_back(Vertex(p + glm::vec3(-s.x, -s.y, s.z), color, glm::vec2(0, 1), glm::vec3(0, -1, 0)));
+
 
 	return verts;
 }
@@ -172,6 +178,7 @@ void init()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 
+
 	//Initializing 
 	shadowMappingDepthShader = new Shader<ShadowUniforms>("assets/shaders/depthMapping/shadowmap.vert",
 	                                                      "assets/shaders/depthMapping/shadowmap.frag");
@@ -232,7 +239,7 @@ void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> model
 	glBindVertexArray(cubeVAO);
 	glActiveTexture(GL_TEXTURE0);
 	gridTexture->bind();
-	glDrawArrays(GL_QUADS, 0, roomVertices.size());
+	glDrawArrays(GL_TRIANGLES, 0, roomVertices.size());
 	glBindVertexArray(0);
 }
 
@@ -242,7 +249,10 @@ void display()
 	// std::cout << "Display" << std::endl;
 	float fac = 10.0f;
 	static float lightDirection = 0;
-	lightDirection += 0.001f;
+	if(rotating)
+	{
+		lightDirection += 0.001f;
+	}
 
 	glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
 	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, -5, 10);
@@ -286,7 +296,7 @@ void display()
 	shaders[selectedShader]->setUniform(Uniforms::viewMatrix, view);
 	shaders[selectedShader]->setUniform(Uniforms::modelMatrix, modelMatrix);
 	shaders[selectedShader]->setUniform(Uniforms::shadowMatrix, shadowProjectionMatrix * shadowCameraMatrix);
-	shaders[selectedShader]->setUniform(Uniforms::lightPos, lightAngle);
+	shaders[selectedShader]->setUniform(Uniforms::lightPos,  lightAngle);
 
 	if (takeScreenshot)
 	{
@@ -402,6 +412,12 @@ int main(int argc, char* argv[])
 	glutInit(&argc, argv);
 	glutInitWindowSize(1900, 1000);
 	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
+
+
+	glutInitContextVersion(4, 6);
+	glutInitContextProfile(GLUT_CORE_PROFILE);
+
+
 	glutCreateWindow("Realtime ShadowMapping");
 
 	glutDisplayFunc(display);
