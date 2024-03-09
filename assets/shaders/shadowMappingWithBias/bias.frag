@@ -14,7 +14,6 @@ in vec4 shadowPos1;
 in vec4 shadowPos2;
 in vec4 shadowPos3;
 
-uniform vec3 lightPos;
 
 uniform int amountOfLights;
 

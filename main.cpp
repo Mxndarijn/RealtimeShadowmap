@@ -64,7 +64,6 @@ enum class Uniforms
 	s_shadowmap3,
 	diffuseColor,
 	textureFactor,
-	lightPos,
 	amountOfLights
 };
 
@@ -186,7 +185,6 @@ void setupShader(Shader<Uniforms>* shader)
 	shader->registerUniform(Uniforms::s_shadowmap2, "s_shadowmap2");
 	shader->registerUniform(Uniforms::s_shadowmap3, "s_shadowmap3");
 	shader->registerUniform(Uniforms::amountOfLights, "amountOfLights");
-	shader->registerUniform(Uniforms::lightPos, "lightPos");
 	shader->use();
 	shader->setUniform(Uniforms::s_texture, 0);
 	shader->setUniform(Uniforms::s_shadowmap, 1);
@@ -222,6 +220,8 @@ void init()
 
 	shaders.push_back(new Shader<Uniforms>("assets/shaders/shadowMappingWithPCF/pcf.vert",
 	                                       "assets/shaders/shadowMappingWithPCF/pcf.frag"));
+	shaders.push_back(new Shader<Uniforms>("assets/shaders/shadowMappingWithShadowRemover/remover.vert",
+	                                       "assets/shaders/shadowMappingWithShadowRemover/remover.frag"));
 
 	defaultDrawShader = new Shader<Uniforms>("assets/shaders/defaultDraw/default.vert",
 	                                         "assets/shaders/defaultDraw/default.frag");

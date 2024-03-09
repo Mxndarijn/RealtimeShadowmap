@@ -15,7 +15,6 @@ in vec4 shadowPos3;
 
 out vec4 fragColor;
 
-uniform vec4 lightPos;
 uniform int amountOfLights;
 
 void main() {
