@@ -56,6 +56,7 @@ protected:
 	GLuint programId;
 	std::vector<int> uniformLocations;
 	std::vector<std::vector<int>> uniformLocationsArray;
+	std::string vertS;
 
 public:
 	UntypedShader(std::string vertShader, std::string fragShader);

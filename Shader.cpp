@@ -219,6 +219,7 @@ UntypedShader::UntypedShader(std::string vertShader, std::string fragShader)
 	programId = glCreateProgram();
 	addShader(vertShader, GL_VERTEX_SHADER);
 	addShader(fragShader, GL_FRAGMENT_SHADER);
+	vertS = vertShader;
 	printProgramInfoLog(vertShader + "/" + fragShader, programId);
 }
 

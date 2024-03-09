@@ -194,6 +194,9 @@ void init()
 	shaders.push_back(new Shader<Uniforms>("assets/shaders/shadowMappingWithBias/bias.vert",
 	                                       "assets/shaders/shadowMappingWithBias/bias.frag"));
 
+	shaders.push_back(new Shader<Uniforms>("assets/shaders/shadowMappingWithPCF/pcf.vert",
+	                                       "assets/shaders/shadowMappingWithPCF/pcf.frag"));
+
 	for (int i = 0; i < shaders.size(); i++)
 	{
 		setupShader(shaders[i]);
@@ -330,6 +333,8 @@ void reshape(int newWidth, int newHeight)
 	glutPostRedisplay();
 }
 
+float minTimeBeforeShaderSwitch = 1;
+
 void keyboard(unsigned char key, int x, int y)
 {
 	if (key == VK_ESCAPE)
@@ -342,8 +347,12 @@ void keyboard(unsigned char key, int x, int y)
 		holdMouse = !holdMouse;
 	if (key == ',' || key == '.')
 	{
-		std::cout << "switching shader" << std::endl;
-		selectedShader = (selectedShader + (int)shaders.size() + (keys['.'] ? 1 : -1)) % shaders.size();
+		if(minTimeBeforeShaderSwitch <= 0)
+		{
+			minTimeBeforeShaderSwitch = 1;
+			std::cout << "switching shader" << std::endl;
+			selectedShader = (selectedShader + (int)shaders.size() + (key == '.' ? 1 : -1)) % shaders.size();
+		}
 	}
 	if (key == 'p')
 	{
@@ -366,6 +375,7 @@ void update()
 		rotation += deltaTime * 1.0f;
 
 	float speed = 15;
+	minTimeBeforeShaderSwitch -= deltaTime;
 
 	if (keys['d']) camera.move(180, deltaTime * speed);
 	if (keys['a']) camera.move(0, deltaTime * speed);
