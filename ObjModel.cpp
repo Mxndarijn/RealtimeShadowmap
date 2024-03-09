@@ -365,14 +365,14 @@ void ObjModel::draw(Texture* texOverride)
 		MaterialInfo* material = materials[group->materialIndex];
 		if(material->hasTexture)
 			material->texture->bind();
-		glActiveTexture(GL_TEXTURE0);
+		//glActiveTexture(GL_TEXTURE0);
 		if (texOverride != nullptr)
 			texOverride->bind();
 		else if(material->bumpMap != NULL)
 			material->bumpMap->bind();
 		else
 			material->texture->bind();
-		glActiveTexture(GL_TEXTURE0);
+		//glActiveTexture(GL_TEXTURE0);
 
 		glDrawArrays(GL_TRIANGLES, group->start, group->end - group->start);
 	}

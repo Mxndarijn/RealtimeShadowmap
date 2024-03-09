@@ -58,8 +58,9 @@ enum class Uniforms
 	s_shadowmap,
 	diffuseColor,
 	textureFactor,
-	lightPos
+	amountOfLights
 };
+
 
 
 std::vector<Vertex> roomVertices;
@@ -74,14 +75,18 @@ Shader<Uniforms>* defaultDrawShader;
 std::vector<Shader<Uniforms>*> shaders;
 int selectedShader = 0;
 
-FBO* depthMapFBO;
-
 glm::ivec2 screenSize;
 float rotation;
 bool rotating = false;
 int lastTime;
 bool keys[255];
 bool holdMouse = false;
+
+
+std::vector<float> lights;
+std::vector<FBO*> lightsFBO;
+
+int maxLights = 4;
 
 
 std::vector<Vertex> buildCube(const glm::vec3& p, const glm::vec3& s)
@@ -165,13 +170,19 @@ void setupShader(Shader<Uniforms>* shader)
 	shader->registerUniform(Uniforms::modelMatrix, "modelMatrix");
 	shader->registerUniform(Uniforms::projectionMatrix, "projectionMatrix");
 	shader->registerUniform(Uniforms::viewMatrix, "viewMatrix");
-	shader->registerUniform(Uniforms::shadowMatrix, "shadowMatrix");
+	shader->registerUniformArray(Uniforms::s_shadowmap, "s_shadowmap", maxLights);
+	shader->registerUniformArray(Uniforms::shadowMatrix, "shadowMatrix", maxLights);
+	
 	shader->registerUniform(Uniforms::s_texture, "s_texture");
-	shader->registerUniform(Uniforms::s_shadowmap, "s_shadowmap");
-	shader->registerUniform(Uniforms::lightPos, "lightPos");
+
+	shader->registerUniform(Uniforms::amountOfLights, "amountOfLights");
 	shader->use();
 	shader->setUniform(Uniforms::s_texture, 0);
-	shader->setUniform(Uniforms::s_shadowmap, 1);
+	for (int i = 0; i < maxLights; i++)
+	{
+		shader->setUniform(Uniforms::s_shadowmap, i, i + 1);
+	}
+
 }
 
 void init()
@@ -179,6 +190,16 @@ void init()
 	glewInit();
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
+
+	lights.push_back(0.0);
+	lights.push_back(5.0);
+	lights.push_back(20.0);
+	lights.push_back(30.0);
+
+	for(int i = 0; i < maxLights; i++)
+	{
+		lightsFBO.push_back(new FBO(SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, false, 0, true));
+	}
 
 
 	//Initializing 
@@ -213,15 +234,11 @@ void init()
 	defaultDrawShader->registerUniform(Uniforms::s_texture, "s_texture");
 	defaultDrawShader->use();
 	defaultDrawShader->setUniform(Uniforms::s_texture, 0);
-	defaultDrawShader->setUniform(Uniforms::s_shadowmap, 1);
 
 	for (int i = 0; i < shaders.size(); i++)
 	{
 		setupShader(shaders[i]);
 	}
-
-
-	depthMapFBO = new FBO(SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT, false, 0, true);
 
 
 	//	models.push_back(new ObjModel("gamecube/model_n.obj"));
@@ -230,7 +247,6 @@ void init()
 	models.push_back(new ObjModel("spongebob/spongebob.obj"));
 	sun = new ObjModel("sun/sun.obj");
 
-	//
 	if (glDebugMessageCallback)
 	{
 		glDebugMessageCallback(&onDebug, NULL);
@@ -247,7 +263,6 @@ void init()
 }
 
 bool takeScreenshot = false;
-static float lightDirection = 0;
 
 void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> modelViewCallback, glm::mat4& projection, glm::mat4& view)
 {
@@ -267,20 +282,22 @@ void drawScene(int pass, std::function<void(const glm::mat4& modelMatrix)> model
 
 	if(pass == 1)
 	{
+		for(int i = 0; i < lights.size(); i++)
+		{
+			glm::vec3 lightAngle(cos(lights[i]) * 3, 2, sin(lights[i]) * 3);
 
-		glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
+			glm::mat4 sunModelMatrix = glm::mat4(1);
+			sunModelMatrix = glm::translate(sunModelMatrix, lightAngle);
+			sunModelMatrix = glm::rotate(sunModelMatrix, rotation, glm::vec3(0, 1, 0));
+			sunModelMatrix = glm::scale(sunModelMatrix, glm::vec3(0.2, 0.2, 0.2));
 
-		glm::mat4 sunModelMatrix = glm::mat4(1);
-		sunModelMatrix = glm::translate(sunModelMatrix, lightAngle);
-		sunModelMatrix = glm::rotate(sunModelMatrix, rotation, glm::vec3(0, 1, 0));
-		sunModelMatrix = glm::scale(sunModelMatrix, glm::vec3(0.2, 0.2,0.2));
-
-		defaultDrawShader->use();
-		defaultDrawShader->setUniform(Uniforms::projectionMatrix, projection);
-		defaultDrawShader->setUniform(Uniforms::viewMatrix, view);
-		defaultDrawShader->setUniform(Uniforms::modelMatrix, sunModelMatrix);
-
-		sun->draw();
+			defaultDrawShader->use();
+			defaultDrawShader->setUniform(Uniforms::projectionMatrix, projection);
+			defaultDrawShader->setUniform(Uniforms::viewMatrix, view);
+			defaultDrawShader->setUniform(Uniforms::modelMatrix, sunModelMatrix);
+			glActiveTexture(GL_TEXTURE0);
+			sun->draw();
+		}
 	}
 }
 
@@ -289,35 +306,39 @@ void display()
 {
 	// std::cout << "Display" << std::endl;
 	float fac = 10.0f;
-	if (rotating)
+	std::vector<glm::mat4> shadowMatrices(maxLights);
+	for (int i = 0; i < lights.size(); i++)
 	{
-		lightDirection += 0.001f;
+		if (rotating)
+		{
+			lights[i] += 0.001f;
+		}
+		glm::vec3 lightAngle(cos(lights[i]) * 3, 2, sin(lights[i]) * 3);
+		glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, 0.001, 10);
+		glm::mat4 shadowCameraMatrix = glm::lookAt(lightAngle + glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+
+		glDisable(GL_SCISSOR_TEST);
+
+		shadowMappingDepthShader->use();
+		shadowMappingDepthShader->setUniform(ShadowUniforms::projectionMatrix, shadowProjectionMatrix);
+		shadowMappingDepthShader->setUniform(ShadowUniforms::viewMatrix, shadowCameraMatrix);
+		shadowMatrices[i] = (shadowCameraMatrix * shadowProjectionMatrix);
+		shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, glm::mat4(1));
+
+
+		lightsFBO[i]->bind();
+		glViewport(0, 0, lightsFBO[i]->getWidth(), lightsFBO[i]->getHeight());
+		glClearColor(1, 0, 0, 1);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+		glCullFace(GL_FRONT);
+		drawScene(0, [&](const glm::mat4& modelMatrix)
+			{
+				// std::cout << "Settings matrix" << std::endl;
+				shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, modelMatrix);
+			}, glm::mat4(), glm::mat4());
+		lightsFBO[i]->unbind();
+		glCullFace(GL_BACK);
 	}
-
-	glm::vec3 lightAngle(cos(lightDirection) * 3, 2, sin(lightDirection) * 3);
-	glm::mat4 shadowProjectionMatrix = glm::ortho<float>(-fac, fac, -fac, fac, 0.001, 10);
-	glm::mat4 shadowCameraMatrix = glm::lookAt(lightAngle + glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-
-	glDisable(GL_SCISSOR_TEST);
-
-	shadowMappingDepthShader->use();
-	shadowMappingDepthShader->setUniform(ShadowUniforms::projectionMatrix, shadowProjectionMatrix);
-	shadowMappingDepthShader->setUniform(ShadowUniforms::viewMatrix, shadowCameraMatrix);
-	shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, glm::mat4(1));
-
-
-	depthMapFBO->bind();
-	glViewport(0, 0, depthMapFBO->getWidth(), depthMapFBO->getHeight());
-	glClearColor(1, 0, 0, 1);
-	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	glCullFace(GL_FRONT);
-	drawScene(0, [&](const glm::mat4& modelMatrix)
-	{
-		// std::cout << "Settings matrix" << std::endl;
-		shadowMappingDepthShader->setUniform(ShadowUniforms::modelMatrix, modelMatrix);
-	}, glm::mat4(), glm::mat4());
-	depthMapFBO->unbind();
-	glCullFace(GL_BACK);
 
 	glViewport(0, 0, screenSize.x, screenSize.y);
 	glEnable(GL_SCISSOR_TEST);
@@ -328,15 +349,20 @@ void display()
 	modelMatrix = glm::translate(modelMatrix, glm::vec3(0, 0, 0));
 	modelMatrix = glm::rotate(modelMatrix, rotation, glm::vec3(0, 1, 0));
 
-	glm::mat4 projection = glm::perspective(glm::radians(70.0f), screenSize.x / (float)screenSize.y, 0.01f, 300.0f);
+	glm::mat4 projection = glm::perspective(glm::radians(70.0f), screenSize.x / (float)screenSize.y, 0.01f, 200.0f);
 	glm::mat4 view = camera.getMat();
 
 	shaders[selectedShader]->use();
 	shaders[selectedShader]->setUniform(Uniforms::projectionMatrix, projection);
 	shaders[selectedShader]->setUniform(Uniforms::viewMatrix, view);
 	shaders[selectedShader]->setUniform(Uniforms::modelMatrix, modelMatrix);
-	shaders[selectedShader]->setUniform(Uniforms::shadowMatrix, shadowProjectionMatrix * shadowCameraMatrix);
-	shaders[selectedShader]->setUniform(Uniforms::lightPos, lightAngle);
+
+	for(int i = 0; i < lights.size(); i++)
+	{
+		shaders[selectedShader]->setUniform(Uniforms::shadowMatrix, i, shadowMatrices[i]);
+	}
+
+	shaders[selectedShader]->setUniform(Uniforms::amountOfLights, (int) lights.size());
 
 	if (takeScreenshot)
 	{
@@ -346,10 +372,17 @@ void display()
 		{
 			std::cout << "Screenshot saved." << std::endl;
 		};
-		depthMapFBO->saveAsFileBackground("depthMap.png", callback);
+		for(int i = 0; i < lights.size(); i++)
+		{
+			lightsFBO[i]->saveAsFileBackground("depthMapLight" + std::to_string(i) + ".png", callback);
+		}
 	}
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, depthMapFBO->texid[0]);
+	for(int i = 0; i < lights.size(); i++)
+	{
+		glActiveTexture(GL_TEXTURE1 + i);
+		glBindTexture(GL_TEXTURE_2D, lightsFBO[i]->texid[0]);
+	}
+	
 
 	drawScene(1, [&](const glm::mat4& modelMatrix)
 	{
